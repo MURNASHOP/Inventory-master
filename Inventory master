@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Murna Business Center Inventory</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .section {
+            margin-bottom: 30px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #4CAF50;
+            color: white;
+        }
+        button {
+            padding: 10px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        input {
+            margin: 5px 0;
+            padding: 10px;
+            width: 100%;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Murna Business Center Inventory Master</h1>
+
+<!-- Fannin Abokin Ciniki -->
+<div class="section">
+    <h2>Customer Information</h2>
+    <input type="text" id="customerName" placeholder="Enter Customer Name">
+    <input type="text" id="customerPhone" placeholder="Enter Customer Phone Number">
+</div>
+
+<!-- Ƙara Sabbin Kayayyaki -->
+<div class="section">
+    <h2>Add Product to Stock</h2>
+    <input type="text" id="productName" placeholder="Product Name">
+    <input type="number" id="productPrice" placeholder="Price (₦)">
+    <input type="number" id="productQuantity" placeholder="Quantity">
+    <button onclick="addProduct()">Add Product</button>
+</div>
+
+<!-- Kayayyakin da ke Stock -->
+<div class="section">
+    <h2>Available Stock</h2>
+    <table id="stockTable">
+        <thead>
+            <tr>
+                <th>Product</th>
+                <th>Price (₦)</th>
+                <th>Quantity</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Products will be dynamically added here -->
+        </tbody>
+    </table>
+</div>
+
+<!-- Invoice Creation -->
+<div class="section">
+    <h2>Create Invoice</h2>
+    <select id="productSelect">
+        <option value="" disabled selected>Select Product</option>
+    </select>
+    <input type="number" id="selectedQuantity" placeholder="Enter Quantity">
+    <button onclick="addToInvoice()">Add to Invoice</button>
+
+    <h3>Invoice Details</h3>
+    <table id="invoiceTable">
+        <thead>
+            <tr>
+                <th>Product</th>
+                <th>Price (₦)</th>
+                <th>Quantity</th>
+                <th>Total (₦)</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Invoice items will be dynamically added here -->
+        </tbody>
+    </table>
+    <p>Total Amount: ₦<span id="invoiceTotal">0</span></p>
+    <p>Amount Paid: ₦<input type="number" id="amountPaid" placeholder="Enter Amount Paid" oninput="calculateRemaining()"></p>
+    <p>Remaining Balance: ₦<span id="remainingBalance">0</span></p>
+
+    <button onclick="generateInvoicePDF()">Generate Invoice (PDF)</button>
+</div>
+
+<!-- History Section -->
+<div class="section">
+    <h2>Transaction History</h2>
+    <table id="historyTable">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Customer Name</th>
+                <th>Amount Paid (₦)</th>
+                <th>Remaining Balance (₦)</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- History records will be dynamically added here -->
+        </tbody>
+    </table>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+    let stock = [];
+    let invoice = [];
+    let history = [];
+    let invoiceTotal = 0;
+
+    function addProduct() {
+        const name = document.getElementById('productName').value;
+        const price = parseFloat(document.getElementById('productPrice').value);
+        const quantity = parseInt(document.getElementById('productQuantity').value);
+
+        if (!name || isNaN(price) || isNaN(quantity)) {
+            alert('Please fill all fields correctly.');
+            return;
+        }
+
+        stock.push({ name, price, quantity });
+        updateStockTable();
+        updateProductSelect();
+    }
+
+    function updateStockTable() {
+        const stockTable = document.getElementById('stockTable').querySelector('tbody');
+        stockTable.innerHTML = '';
+        stock.forEach((product, index) => {
+            const row = `<tr>
+                <td>${product.name}</td>
+                <td>${product.price}</td>
+                <td>${product.quantity}</td>
+                <td>
+                    <button onclick="removeProduct(${index})">Remove</button>
+                </td>
+            </tr>`;
+            stockTable.innerHTML += row;
+        });
+    }
+
+    function updateProductSelect() {
+        const productSelect = document.getElementById('productSelect');
+        productSelect.innerHTML = '<option value="" disabled selected>Select Product</option>';
+        stock.forEach((product, index) => {
+            const option = `<option value="${index}">${product.name} - ₦${product.price}</option>`;
+            productSelect.innerHTML += option;
+        });
+    }
+
+    function addToInvoice() {
+        const productIndex = parseInt(document.getElementById('productSelect').value);
+        const quantity = parseInt(document.getElementById('selectedQuantity').value);
+
+        if (isNaN(productIndex) || isNaN(quantity)) {
+            alert('Please select a product and enter a valid quantity.');
+            return;
+        }
+
+        const product = stock[productIndex];
+        if (product.quantity < quantity) {
+            alert('Insufficient stock.');
+            return;
+        }
+
+        const total = product.price * quantity;
+        invoice.push({ name: product.name, price: product.price, quantity, total });
+        product.quantity -= quantity;
+        invoiceTotal += total;
+
+        updateInvoiceTable();
+        updateStockTable();
+    }
+
+    function updateInvoiceTable() {
+        const invoiceTable = document.getElementById('invoiceTable').querySelector('tbody');
+        invoiceTable.innerHTML = '';
+        invoice.forEach(item => {
+            const row = `<tr>
+                <td>${item.name}</td>
+                <td>${item.price}</td>
+                <td>${item.quantity}</td>
+                <td>${item.total}</td>
+            </tr>`;
+            invoiceTable.innerHTML += row;
+        });
+
+        document.getElementById('invoiceTotal').textContent = invoiceTotal;
+    }
+
+    function calculateRemaining() {
+        const amountPaid = parseFloat(document.getElementById('amountPaid').value);
+        const remaining = amountPaid ? invoiceTotal - amountPaid : invoiceTotal;
+        document.getElementById('remainingBalance').textContent = remaining.toFixed(2);
+    }
+
+    function generateInvoicePDF() {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        const date = new Date();
+
+        const customerName = document.getElementById('customerName').value || 'N/A';
+        const customerPhone = document.getElementById('customerPhone').value || 'N/A';
+        const totalAmount = document.getElementById('invoiceTotal').textContent;
+        const remainingBalance = document.getElementById('remainingBalance').textContent;
+
+        doc.text(`Invoice`, 10, 10);
+        doc.text(`Date: ${date.toLocaleDateString()}`, 10, 20);
+        doc.text(`Time: ${date.toLocaleTimeString()}`, 10, 30);
+        doc.text(`Customer: ${customerName}`, 10, 40);
+        doc.text(`Phone: ${customerPhone}`, 10, 50);
+        doc.text(`Total Amount: ₦${totalAmount}`, 10, 60);
+        doc.text(`Remaining Balance: ₦${remainingBalance}`, 10, 70);
+
+        doc.autoTable({
+            startY: 80,
+            head: [['Product', 'Price (₦)', 'Quantity', 'Total (₦)']],
+            body: invoice.map(item => [item.name, item.price, item.quantity, item.total]),
+        });
+
+        doc.save('invoice.pdf');
+
+        // Update History
+        history.push({
+            date: `${date.toLocaleDateString()} ${date.toLocaleTimeString()}`,
+            customer: customerName,
+            paid: totalAmount,
+            remaining: remainingBalance
+        });
+        updateHistoryTable();
+    }
+
+    function updateHistoryTable() {
+        const historyTable = document.getElementById('historyTable').querySelector('tbody');
+        historyTable.innerHTML = '';
+        history.forEach(record => {
+            const row = `<tr>
+                <td>${record.date}</td>
+                <td>${record.customer}</td>
+                <td>${record.paid}</td>
+                <td>${record.remaining}</td>
+            </tr>`;
+            historyTable.innerHTML += row;
+        });
+    }
+</script>
+
+</body>
+</html>
